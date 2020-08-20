@@ -831,14 +831,18 @@ bool CoreChecks::ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE *cb_nod
                     VkImageView image_view;
                     VkImageLayout image_layout;
                     const IMAGE_VIEW_STATE *image_view_state;
+                    const SAMPLER_STATE *sampler_state = nullptr;
                     if (descriptor_class == DescriptorClass::ImageSampler) {
-                        image_view = static_cast<const ImageSamplerDescriptor *>(descriptor)->GetImageView();
-                        image_view_state = static_cast<const ImageSamplerDescriptor *>(descriptor)->GetImageViewState();
-                        image_layout = static_cast<const ImageSamplerDescriptor *>(descriptor)->GetImageLayout();
+                        const ImageSamplerDescriptor *image_descriptor = static_cast<const ImageSamplerDescriptor *>(descriptor);
+                        image_view = image_descriptor->GetImageView();
+                        image_view_state = image_descriptor->GetImageViewState();
+                        image_layout = image_descriptor->GetImageLayout();
+                        sampler_state = image_descriptor->GetSamplerState();
                     } else {
-                        image_view = static_cast<const ImageDescriptor *>(descriptor)->GetImageView();
-                        image_view_state = static_cast<const ImageDescriptor *>(descriptor)->GetImageViewState();
-                        image_layout = static_cast<const ImageDescriptor *>(descriptor)->GetImageLayout();
+                        const ImageDescriptor *image_descriptor = static_cast<const ImageDescriptor *>(descriptor);
+                        image_view = image_descriptor->GetImageView();
+                        image_view_state = image_descriptor->GetImageViewState();
+                        image_layout = image_descriptor->GetImageLayout();
                     }
 
                     if (image_view) {
@@ -975,6 +979,24 @@ bool CoreChecks::ValidateDescriptorSetBindingData(const CMD_BUFFER_STATE *cb_nod
                                 }
                                 ++view_index;
                             }
+                        }
+
+                        // If ImageView is used by a unnormalizedCoordinates sampler, it needs to check ImageView type
+                        if ((sampler_state && sampler_state->createInfo.unnormalizedCoordinates) &&
+                            (image_view_ci.viewType &
+                             (VK_IMAGE_VIEW_TYPE_3D & VK_IMAGE_VIEW_TYPE_CUBE & VK_IMAGE_VIEW_TYPE_1D_ARRAY &
+                              VK_IMAGE_VIEW_TYPE_2D_ARRAY & VK_IMAGE_VIEW_TYPE_CUBE_ARRAY))) {
+                            auto set = descriptor_set->GetSet();
+                            LogObjectList objlist(set);
+                            objlist.add(image_view);
+                            objlist.add(sampler_state->sampler);
+                            return LogError(objlist, vuids.sampler_imageview_type,
+                                            "%s encountered the following validation error at %s time: %s, type: %s in "
+                                            "Descriptor in binding #%" PRIu32 " index %" PRIu32 "is used by %s.",
+                                            report_data->FormatHandle(set).c_str(), caller,
+                                            report_data->FormatHandle(image_view).c_str(),
+                                            string_VkImageViewType(image_view_ci.viewType), binding, index,
+                                            report_data->FormatHandle(sampler_state->sampler).c_str());
                         }
                     }
                 } else if (descriptor_class == DescriptorClass::TexelBuffer) {
