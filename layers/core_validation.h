@@ -56,6 +56,7 @@ struct DrawDispatchVuid {
     const char* imageview_atomic;
     const char* push_constants_set;
     const char* image_subresources;
+    const char* descriptor_vaild;
 };
 
 typedef struct {
